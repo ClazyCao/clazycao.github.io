@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+  <link rel="alternate" href="/atom.xml" title="Cao V" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.5.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="新闻分类的案例，接触到一些自然语言的处理。本篇part1主要说下学习到的基础知识点，可以对新闻正文进行关键词的提取。LDA 主题建模，贝叶斯算法的运用，暂时没有找到很好的原理去参考，等后面我去补一下理论知识，放在part2或者part3里面写。  1，知识点1.1，语料 what：新闻文本字符串，语料库是指很多新闻文本合集 1.2，停用词 what：语料中大量出现的，对于文本分类没什么用的，比如">
+<meta name="keywords" content="机器学习">
+<meta property="og:type" content="article">
+<meta property="og:title" content="【自然语言】新闻分类part1--基础知识点与实现">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0&#x2F;index.html">
+<meta property="og:site_name" content="Cao V">
+<meta property="og:description" content="新闻分类的案例，接触到一些自然语言的处理。本篇part1主要说下学习到的基础知识点，可以对新闻正文进行关键词的提取。LDA 主题建模，贝叶斯算法的运用，暂时没有找到很好的原理去参考，等后面我去补一下理论知识，放在part2或者part3里面写。  1，知识点1.1，语料 what：新闻文本字符串，语料库是指很多新闻文本合集 1.2，停用词 what：语料中大量出现的，对于文本分类没什么用的，比如">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0&#x2F;TF.jpg">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0&#x2F;IDF.jpg">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0&#x2F;tf-idf.jpg">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0&#x2F;%E7%9B%B8%E4%BC%BC%E5%BA%A61.jpg">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0&#x2F;%E7%9B%B8%E4%BC%BC%E5%BA%A62.jpg">
+<meta property="og:updated_time" content="2019-11-09T07:36:38.570Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0&#x2F;TF.jpg">
+
+<link rel="canonical" href="http://yoursite.com/all/%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+
+  <title>【自然语言】新闻分类part1--基础知识点与实现 | Cao V</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Cao V</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">人间观察笔记</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/all/%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/touxiang.jpg">
+      <meta itemprop="name" content="cao wei">
+      <meta itemprop="description" content="30岁人类普遍死亡，50岁人生刚刚开始">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Cao V">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          【自然语言】新闻分类part1--基础知识点与实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2019-11-09 15:00:14 / 修改时间：15:36:38" itemprop="dateCreated datePublished" datetime="2019-11-09T15:00:14+08:00">2019-11-09</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <hr>
+<p>新闻分类的案例，接触到一些自然语言的处理。<br>本篇part1主要说下学习到的基础知识点，可以对新闻正文进行关键词的提取。<br>LDA 主题建模，贝叶斯算法的运用，暂时没有找到很好的原理去参考，等后面我去补一下理论知识，放在part2或者part3里面写。</p>
+<hr>
+<h3 id="1，知识点"><a href="#1，知识点" class="headerlink" title="1，知识点"></a>1，知识点</h3><h4 id="1-1，语料"><a href="#1-1，语料" class="headerlink" title="1.1，语料"></a>1.1，语料</h4><ul>
+<li><p>what：新闻文本字符串，语料库是指很多新闻文本合集</p>
+<h4 id="1-2，停用词"><a href="#1-2，停用词" class="headerlink" title="1.2，停用词"></a>1.2，停用词</h4></li>
+<li><p>what：语料中大量出现的，对于文本分类没什么用的，比如语气助词，标点符号</p>
+</li>
+<li><p>why：对文本分类没用</p>
+</li>
+<li><p>how：找到停用词表，把停用词去除</p>
+<h4 id="1-3，Tf-idf-关键词提取"><a href="#1-3，Tf-idf-关键词提取" class="headerlink" title="1.3，Tf-idf 关键词提取"></a>1.3，Tf-idf 关键词提取</h4></li>
+<li><p>what：<br>&emsp; (1) 对语料库进行关键词提取，如何判断出词是关键词，是重要的一步。<br>&emsp; (2) 关键字需要满足两个条件<br>&emsp;&emsp;&emsp; a，在本篇语料中词频高（除却停用词）<br>&emsp;&emsp;&emsp; b，在全部语料库中越稀有越好</p>
+</li>
+<li><p>how：<br>&emsp; (1) 词频（Term Frequency) 统计<br>&emsp; (2) 统计后发现出现次数最多的词是：的，是，这……  属于停用词，去除。<br>&emsp; (3) 重新统计词频，分辨常见词与关键词</p>
+</li>
+</ul>
+<h5 id="emsp-1-3-1-词频（Term-Frequency"><a href="#emsp-1-3-1-词频（Term-Frequency" class="headerlink" title="&emsp;1.3.1 词频（Term Frequency)"></a>&emsp;1.3.1 词频（Term Frequency)</h5><img src="/all/%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0/TF.jpg" class="" title="图片-TF">
+<h5 id="emsp-1-3-2-IDF-逆文档频率（Inverse-Document-Frequency"><a href="#emsp-1-3-2-IDF-逆文档频率（Inverse-Document-Frequency" class="headerlink" title="&emsp;1.3.2 IDF 逆文档频率（Inverse Document Frequency)"></a>&emsp;1.3.2 IDF 逆文档频率（Inverse Document Frequency)</h5><p>&emsp;&emsp; 如果某个词比较少见，但是在本篇文章中多次出现，那么它很可能是关键词</p>
+<img src="/all/%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0/IDF.jpg" class="" title="图片-IDF">
+<p>&emsp;&emsp;词越稀有，log()括号中的值越大，log单调增，IDF越大；反之，IDF越小。</p>
+<h5 id="emsp-1-3-3-Tf-idf"><a href="#emsp-1-3-3-Tf-idf" class="headerlink" title="&emsp;1.3.3 Tf-idf"></a>&emsp;1.3.3 Tf-idf</h5><img src="/all/%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0/tf-idf.jpg" class="" title="图片-tf-idf">
+<p>&emsp;&emsp;+1是避免分母=0。<br>&emsp;&emsp;某词在本篇语料中，<strong>词频越高，TF越大；某词在语料库中约稀有，IDF越大；综合TF-IDF越大，越是关键字。</strong></p>
+<a id="more"></a>
+
+<h4 id="1-4，相似度"><a href="#1-4，相似度" class="headerlink" title="1.4，相似度"></a>1.4，相似度</h4><ul>
+<li>how：<br>&emsp; (1) 分词；<br>&emsp; (2) 计算词频；<br>&emsp; (3) 构造向量，本例中用到的是词频向量，但是词频向量无法解释词本身意思，可以了解下word2vec等，词转换为向量的多种方法。<blockquote>
+<p>补充：<br>向量a与向量b的数量积，记作a · b （同济版高等数学第六版下p13-14)：<br>$$ a \cdot b = \mid a \mid \mid b \mid cos \theta $$</p>
+</blockquote>
+</li>
+</ul>
+<img src="/all/%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0/%E7%9B%B8%E4%BC%BC%E5%BA%A61.jpg" class="" title="图片-相似度1">
+
+<img src="/all/%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0/%E7%9B%B8%E4%BC%BC%E5%BA%A62.jpg" class="" title="图片-相似度2">
+
+
+<h3 id="2，新闻分类案例"><a href="#2，新闻分类案例" class="headerlink" title="2，新闻分类案例"></a>2，新闻分类案例</h3><h4 id="2-1-数据源"><a href="#2-1-数据源" class="headerlink" title="2.1 数据源"></a>2.1 数据源</h4><p>搜狗的实验室数据-新闻数据：<a href="http://www.sogou.com/labs/resource/ca.php" target="_blank" rel="noopener">http://www.sogou.com/labs/resource/ca.php</a><br>案例中已经将数据做过预处理</p>
+<h4 id="2-2-数据清洗"><a href="#2-2-数据清洗" class="headerlink" title="2.2 数据清洗"></a>2.2 数据清洗</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 00 数据</span></span><br><span class="line"><span class="keyword">import</span> pandas <span class="keyword">as</span> pd</span><br><span class="line"><span class="keyword">import</span> jiebaimport jieba.analyse</span><br><span class="line">pd.set_option(<span class="string">'display.max_columns'</span>, <span class="number">50</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">data_path = <span class="string">'.../'</span></span><br><span class="line">df_news = pd.read_table( data_path + <span class="string">'data/val.txt'</span>, names = [<span class="string">'category'</span>,<span class="string">'theme'</span>,<span class="string">'URL'</span>,<span class="string">'content'</span>],encoding=<span class="string">'utf-8'</span>)</span><br><span class="line">df_news = df_news.dropna()  <span class="comment">#整行删除</span></span><br><span class="line">df_news.head()</span><br><span class="line">df_news.shape</span><br></pre></td></tr></table></figure>
+
+<p>df_news.head()，数据长这个样子</p>
+<table>
+<thead>
+<tr>
+<th>category</th>
+<th>theme</th>
+<th>URL</th>
+<th>content</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>汽车  新辉腾　４．２　Ｖ８　４座加长Ｉｎｄｉｖｉｄｕａｌ版２０１１款　最新报价</td>
+<td><a href="http://auto.data.people.com.cn/model_15782/" target="_blank" rel="noopener">http://auto.data.people.com.cn/model_15782/</a></td>
+<td>经销商　电话　试驾／订车Ｕ憬杭州滨江区江陵路１７８０号４００８－１１２２３３转５８６４＃保常…</td>
+</tr>
+<tr>
+<td>1</td>
+<td>汽车  ９１８　Ｓｐｙｄｅｒ概念车</td>
+<td><a href="http://auto.data.people.com.cn/prdview_165423" target="_blank" rel="noopener">http://auto.data.people.com.cn/prdview_165423</a>..</td>
+<td>呼叫热线　４００８－１００－３００　服务邮箱　ｋｆ＠ｐｅｏｐｌｅｄａｉｌｙ．ｃｏｍ．ｃｎ</td>
+</tr>
+<tr>
+<td>2</td>
+<td>汽车  日内瓦亮相　ＭＩＮＩ性能版／概念车－１．６Ｔ引擎</td>
+<td><a href="http://auto.data.people.com.cn/news/story_5249" target="_blank" rel="noopener">http://auto.data.people.com.cn/news/story_5249</a>…</td>
+<td>ＭＩＮＩ品牌在二月曾经公布了最新的ＭＩＮＩ新概念车Ｃｌｕｂｖａｎ效果图，不过现在在日内瓦车展…</td>
+</tr>
+<tr>
+<td>3</td>
+<td>汽车  清仓大甩卖一汽夏利Ｎ５威志Ｖ２低至３．３９万</td>
+<td><a href="http://auto.data.people.com.cn/news/story_6144" target="_blank" rel="noopener">http://auto.data.people.com.cn/news/story_6144</a>…</td>
+<td>清仓大甩卖！一汽夏利Ｎ５、威志Ｖ２低至３．３９万＝日，启新中国一汽强势推出一汽夏利Ｎ５、威志…</td>
+</tr>
+<tr>
+<td>4</td>
+<td>汽车  大众敞篷家族新成员　高尔夫敞篷版实拍</td>
+<td><a href="http://auto.data.people.com.cn/news/story_5686" target="_blank" rel="noopener">http://auto.data.people.com.cn/news/story_5686</a>…</td>
+<td>在今年３月的日内瓦车展上，我们见到了高尔夫家族的新成员，高尔夫敞篷版，这款全新敞篷车受到了众…</td>
+</tr>
+</tbody></table>
+<p>df_news.shape：(5000,4)</p>
+<blockquote>
+<p>这里待补充思路的导图</p>
+</blockquote>
+<p>主要还是从content正文着手，先分词，然后可以计算词频TF，做关键词提取等工作</p>
+<h4 id="2-3-分词：使用结巴分词器"><a href="#2-3-分词：使用结巴分词器" class="headerlink" title="2.3 分词：使用结巴分词器"></a>2.3 分词：使用结巴分词器</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># -jieba要求是List格式，将content列转换为List格式</span></span><br><span class="line">content = df_news[<span class="string">'content'</span>].values.tolist()</span><br><span class="line">print(content[<span class="number">1000</span>]) <span class="comment">#打开第1000个看下</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># -接下来要做的，就是把这些新闻正文，进行分词</span></span><br><span class="line">content_S = []  <span class="comment">#建立一个空List用来存放分好的词</span></span><br><span class="line"><span class="keyword">for</span> line <span class="keyword">in</span> content: <span class="comment">#一条一条遍历新闻</span></span><br><span class="line">    current_segment = jieba.lcut(line)  <span class="comment">#把每条新闻进行分词</span></span><br><span class="line">    <span class="keyword">if</span> len(current_segment) &gt; <span class="number">1</span> <span class="keyword">and</span> current_segment !=<span class="string">'\r\n'</span>: <span class="comment">#如果词数 &gt;1 并且不是换行符</span></span><br><span class="line">        content_S.append(current_segment)  <span class="comment">#将分好的词追加给 content_S</span></span><br><span class="line">        </span><br><span class="line">content_S[<span class="number">1000</span>]</span><br><span class="line"></span><br><span class="line"><span class="comment"># -换成dataframe格式</span></span><br><span class="line">df_content = pd.DataFrame(&#123;<span class="string">'content_S'</span>: content_S&#125;)</span><br><span class="line">df_content.head()</span><br></pre></td></tr></table></figure>
+<p>df_content.head() 长这样。<br>可以看到我们已经把词语分出来的，每条新闻的词以List格式存放于content_S 列中。</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>content_S</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>[经销商, 　, 电话, 　, 试驾, ／, 订车, Ｕ, 憬, 杭州, 滨江区, 江陵, …</td>
+</tr>
+<tr>
+<td>1</td>
+<td>[呼叫, 热线, 　, ４, ０, ０, ８, －, １, ０, ０, －, ３, ０, ０…</td>
+</tr>
+<tr>
+<td>2</td>
+<td>[Ｍ, Ｉ, Ｎ, Ｉ, 品牌, 在, 二月, 曾经, 公布, 了, 最新, 的, Ｍ, Ｉ…</td>
+</tr>
+<tr>
+<td>3</td>
+<td>[清仓, 大, 甩卖, ！, 一汽, 夏利, Ｎ, ５, 、, 威志, Ｖ, ２, 低至, …</td>
+</tr>
+<tr>
+<td>4</td>
+<td>[在, 今年, ３, 月, 的, 日内瓦, 车展, 上, ，, 我们, 见到, 了, 高尔夫…</td>
+</tr>
+</tbody></table>
+<h4 id="2-4-停用词去除"><a href="#2-4-停用词去除" class="headerlink" title="2.4 停用词去除"></a>2.4 停用词去除</h4><p> 分词结束后，语料中有非常多的停用词，需要去除。下面我们读取停用词表《stopwords.txt》，与语料进行匹配去除。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">stopwords = pd.read_csv(data_path + <span class="string">'stopwords.txt'</span>, index_col=<span class="literal">False</span>, sep = <span class="string">'\t'</span>, quoting=<span class="number">3</span>,names=[<span class="string">'stopword'</span>], encoding=<span class="string">'utf-8'</span>)</span><br><span class="line">stopwords.head(<span class="number">10</span>)</span><br></pre></td></tr></table></figure>
+
+<p>stopwords.head(10) 停用词表长这样</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>stopword</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>!</td>
+</tr>
+<tr>
+<td>1</td>
+<td>“</td>
+</tr>
+<tr>
+<td>2</td>
+<td>#</td>
+</tr>
+<tr>
+<td>3</td>
+<td>$</td>
+</tr>
+<tr>
+<td>4</td>
+<td>%</td>
+</tr>
+<tr>
+<td>5</td>
+<td>&amp;</td>
+</tr>
+<tr>
+<td>6</td>
+<td>‘</td>
+</tr>
+<tr>
+<td>7</td>
+<td>(</td>
+</tr>
+<tr>
+<td>8</td>
+<td>)</td>
+</tr>
+<tr>
+<td>9</td>
+<td>*</td>
+</tr>
+<tr>
+<td>10</td>
+<td>+</td>
+</tr>
+</tbody></table>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># -停用词去除，遍历语料，和停用词。如果有语料中有停用词，就去除</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">drop_stopwords</span><span class="params">(contents, stopwords)</span>:</span>   </span><br><span class="line">    contents_clean = []   <span class="comment">#用来存放去除停用词后的    </span></span><br><span class="line">    all_words = []  <span class="comment">#用来存放所有的词，用于词频计算的分母</span></span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> line <span class="keyword">in</span> contents:</span><br><span class="line">        line_clean = []</span><br><span class="line">        <span class="keyword">for</span> word <span class="keyword">in</span> line:</span><br><span class="line">            <span class="keyword">if</span> word <span class="keyword">in</span> stopwords:</span><br><span class="line">                <span class="keyword">continue</span></span><br><span class="line">            line_clean.append(word)</span><br><span class="line">            all_words.append(str(word))</span><br><span class="line">        contents_clean.append(line_clean)</span><br><span class="line">    <span class="keyword">return</span> contents_clean, all_words</span><br></pre></td></tr></table></figure>
+
+<p>调用上述函数</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">contents = df_content[<span class="string">'content_S'</span>].values.tolist()  <span class="comment">#转换成List格式进行遍历</span></span><br><span class="line">stopwords = stopwords[<span class="string">'stopword'</span>].values.tolist() </span><br><span class="line">contents_clean, all_words = drop_stopwords(contents, stopwords)</span><br></pre></td></tr></table></figure>
+<p>再转换回 dataframe格式</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">df_content=pd.DataFrame(&#123;<span class="string">'contents_clean'</span>:contents_clean&#125;)</span><br><span class="line">df_content.head()</span><br><span class="line">df_all_words = pd.DataFrame(&#123;<span class="string">'all_words'</span>:all_words&#125;)</span><br><span class="line">df_all_words.head()</span><br></pre></td></tr></table></figure>
+<p>最后得到两个单独的dataframe<br>‘df_content’，用于存放剔除通用词后的语料库，每条语料以list格式存放；<br>‘df_all_words’ ，用于存放df_content里所有的词，方便后面计算词频TF。</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>contents_clean</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>[经销商, 电话, 试驾, 订车, Ｕ, 憬, 杭州, 滨江区, 江陵, 路, 号, 转, …</td>
+</tr>
+<tr>
+<td>1</td>
+<td>[呼叫, 热线, 服务, 邮箱, ｋ, ｆ, ｐ, ｅ, ｏ, ｐ, ｌ, ｅ, ｄ, ａ,…</td>
+</tr>
+<tr>
+<td>2</td>
+<td>[Ｍ, Ｉ, Ｎ, Ｉ, 品牌, 二月, 公布, 最新, Ｍ, Ｉ, Ｎ, Ｉ, 新, 概念…</td>
+</tr>
+<tr>
+<td>3</td>
+<td>[清仓, 甩卖, 一汽, 夏利, Ｎ, 威志, Ｖ, 低至, 万, 启新, 中国, 一汽, …</td>
+</tr>
+<tr>
+<td>4</td>
+<td>[日内瓦, 车展, 见到, 高尔夫, 家族, 新, 成员, 高尔夫, 敞篷版, 款, 全新,…</td>
+</tr>
+</tbody></table>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>all_words</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>经销商</td>
+</tr>
+<tr>
+<td>1</td>
+<td>电话</td>
+</tr>
+<tr>
+<td>2</td>
+<td>试驾</td>
+</tr>
+<tr>
+<td>3</td>
+<td>订车</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Ｕ</td>
+</tr>
+</tbody></table>
+<h5 id="2-5-计算词频TF"><a href="#2-5-计算词频TF" class="headerlink" title="2.5 计算词频TF"></a>2.5 计算词频TF</h5><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># --统计所有的词出现的次数，赋值words_count,并且倒叙排列</span></span><br><span class="line">words_count = df_all_words.groupby(<span class="string">'all_words'</span>)[<span class="string">'all_words'</span>].count().reset_index(name = <span class="string">'count'</span>)  <span class="comment">#一定要reset_index才能命名新列</span></span><br><span class="line">words_count = words_count.sort_values(by=[<span class="string">'count'</span>], ascending=<span class="literal">False</span>)</span><br><span class="line">words_count.head()</span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>all_words</th>
+<th>count</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>4077</td>
+<td>中</td>
+<td>5199</td>
+</tr>
+<tr>
+<td>4209</td>
+<td>中国</td>
+<td>3115</td>
+</tr>
+<tr>
+<td>88255</td>
+<td>说</td>
+<td>3055</td>
+</tr>
+<tr>
+<td>104747</td>
+<td>Ｓ</td>
+<td>2646</td>
+</tr>
+<tr>
+<td>1373</td>
+<td>万</td>
+<td>2390</td>
+</tr>
+</tbody></table>
+<p>‘all_words’计算出，语料库词频TF，最多的是“中”、“中国”等词语。这些词语频繁出现，所以对新闻正文分类并没有什么用，无法作为关键词使用。</p>
+<h5 id="2-6-TF-IDF-提取关键词"><a href="#2-6-TF-IDF-提取关键词" class="headerlink" title="2.6 TF-IDF 提取关键词"></a>2.6 TF-IDF 提取关键词</h5><p>不用自己写函数，jieba 里面已经有计算tf-idf的函数。<br>使用 jieba.analyse.extract_tags ，可以直接计算 TF-IDF，通过参数’topK’定义关键词个数，直接以List格式输出关键词字符。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">index = <span class="number">999</span></span><br><span class="line">print(df_news[<span class="string">'content'</span>][index])</span><br><span class="line">content_S_str = <span class="string">''</span>.join(content_S[index])   <span class="comment">#content_S 是分好的词，List格式，join将List中的各个词语str合并成一整个str</span></span><br><span class="line">print(<span class="string">''</span>.join(jieba.analyse.extract_tags(content_S_str, topK=<span class="number">5</span>, withWeight=<span class="literal">False</span>)))</span><br><span class="line"><span class="comment"># topK= 选择几个关键词返回；</span></span><br></pre></td></tr></table></figure>
+<p>上述运行结果是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">中新网个股涨幅报收成交</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+
+
+
+
+
+    </div>
+
+    
+    
+    
+        
+
+<div>
+<ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者： </strong>cao wei
+  </li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    <a href="http://yoursite.com/all/%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0/" title="【自然语言】新闻分类part1--基础知识点与实现">http://yoursite.com/all/%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/null" rel="noopener" target="_blank"><i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+
+      <footer class="post-footer">
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/all/%E3%80%90%E6%9C%B4%E7%B4%A0%E8%B4%9D%E5%8F%B6%E6%96%AF%E3%80%91%E5%8E%9F%E7%90%86%E7%AE%80%E8%BF%B0%E4%B8%8E%E6%8B%BC%E5%86%99%E7%BA%A0%E6%AD%A3%E6%A1%88%E4%BE%8B/" rel="next" title="【朴素贝叶斯】原理简述与拼写纠正案例">
+                  <i class="fa fa-chevron-left"></i> 【朴素贝叶斯】原理简述与拼写纠正案例
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/" rel="prev" title="【调参方法】贝叶斯优化、Hyperopt工具包">
+                  【调参方法】贝叶斯优化、Hyperopt工具包 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#1，知识点"><span class="nav-number">1.</span> <span class="nav-text">1，知识点</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#1-1，语料"><span class="nav-number">1.1.</span> <span class="nav-text">1.1，语料</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#1-2，停用词"><span class="nav-number">1.2.</span> <span class="nav-text">1.2，停用词</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#1-3，Tf-idf-关键词提取"><span class="nav-number">1.3.</span> <span class="nav-text">1.3，Tf-idf 关键词提取</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#emsp-1-3-1-词频（Term-Frequency"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 1.3.1 词频（Term Frequency)</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#emsp-1-3-2-IDF-逆文档频率（Inverse-Document-Frequency"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 1.3.2 IDF 逆文档频率（Inverse Document Frequency)</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#emsp-1-3-3-Tf-idf"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 1.3.3 Tf-idf</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#1-4，相似度"><span class="nav-number">1.4.</span> <span class="nav-text">1.4，相似度</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2，新闻分类案例"><span class="nav-number">2.</span> <span class="nav-text">2，新闻分类案例</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#2-1-数据源"><span class="nav-number">2.1.</span> <span class="nav-text">2.1 数据源</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-2-数据清洗"><span class="nav-number">2.2.</span> <span class="nav-text">2.2 数据清洗</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-3-分词：使用结巴分词器"><span class="nav-number">2.3.</span> <span class="nav-text">2.3 分词：使用结巴分词器</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-4-停用词去除"><span class="nav-number">2.4.</span> <span class="nav-text">2.4 停用词去除</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#2-5-计算词频TF"><span class="nav-number">2.4.1.</span> <span class="nav-text">2.5 计算词频TF</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#2-6-TF-IDF-提取关键词"><span class="nav-number">2.4.2.</span> <span class="nav-text">2.6 TF-IDF 提取关键词</span></a></li></ol></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="cao wei"
+    src="/images/touxiang.jpg">
+  <p class="site-author-name" itemprop="name">cao wei</p>
+  <div class="site-description" itemprop="description">30岁人类普遍死亡，50岁人生刚刚开始</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+        <span class="site-state-item-count">1</span>
+        <span class="site-state-item-name">分类</span>
+      </div>
+      <div class="site-state-item site-state-tags">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">标签</span>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="/vivi.777@qq.com" title="E-Mail &amp;rarr; vivi.777@qq.com"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+  </div>
+  <div class="cc-license motion-element" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/null" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">cao wei</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.5.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+<script src="/js/utils.js"></script><script src="/js/motion.js"></script>
+<script src="/js/schemes/pisces.js"></script>
+<script src="/js/next-boot.js"></script>
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+      
+<script type="text/x-mathjax-config">
+
+  MathJax.Hub.Config({
+    tex2jax: {
+      inlineMath: [ ['$', '$'], ['\\(', '\\)'] ],
+      processEscapes: true,
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    },
+    TeX: {
+      equationNumbers: {
+        autoNumber: 'AMS'
+      }
+    }
+  });
+
+  MathJax.Hub.Register.StartupHook('TeX Jax Ready', function() {
+    MathJax.InputJax.TeX.prefilterHooks.Add(function(data) {
+      if (data.display) {
+        var next = data.script.nextSibling;
+        while (next && next.nodeName.toLowerCase() === '#text') {
+          next = next.nextSibling;
+        }
+        if (next && next.nodeName.toLowerCase() === 'br') {
+          next.parentNode.removeChild(next);
+        }
+      }
+    });
+  });
+
+  MathJax.Hub.Queue(function() {
+    var all = MathJax.Hub.getAllJax(), i;
+    for (i = 0; i < all.length; i += 1) {
+      element = document.getElementById(all[i].inputID + '-Frame').parentNode;
+      if (element.nodeName.toLowerCase() == 'li') {
+        element = element.parentNode;
+      }
+      element.classList.add('has-jax');
+    }
+  });
+</script>
+<script>
+  NexT.utils.getScript('//cdn.jsdelivr.net/npm/mathjax@2/MathJax.js?config=TeX-AMS-MML_HTMLorMML', () => {
+    MathJax.Hub.Typeset();
+  }, window.MathJax);
+</script>
+
+    
+
+  
+
+</body>
+</html>

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+  <link rel="alternate" href="/atom.xml" title="Cao V" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.5.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="对于贝叶斯公式的推导，本篇不做详述。文章将简单描述下朴素贝叶斯算法作为分类器的原理，最后附上唐宇迪教程中的拼写纠正的示例来展示朴素贝叶斯的工程实现。’虽然是没有水准的学习笔记，但是也是会被盗爬的。我会在文中的π的小数四位+编辑当年年份后两位 行首字加入博客名称为了防盗。  一、贝叶斯$$ P(c|x)= \frac{P(c)P(x|c) }{P(x)} $$    x：样本c：类标记  贝叶斯">
+<meta name="keywords" content="机器学习">
+<meta property="og:type" content="article">
+<meta property="og:title" content="【朴素贝叶斯】原理简述与拼写纠正案例">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E6%9C%B4%E7%B4%A0%E8%B4%9D%E5%8F%B6%E6%96%AF%E3%80%91%E5%8E%9F%E7%90%86%E7%AE%80%E8%BF%B0%E4%B8%8E%E6%8B%BC%E5%86%99%E7%BA%A0%E6%AD%A3%E6%A1%88%E4%BE%8B&#x2F;index.html">
+<meta property="og:site_name" content="Cao V">
+<meta property="og:description" content="对于贝叶斯公式的推导，本篇不做详述。文章将简单描述下朴素贝叶斯算法作为分类器的原理，最后附上唐宇迪教程中的拼写纠正的示例来展示朴素贝叶斯的工程实现。’虽然是没有水准的学习笔记，但是也是会被盗爬的。我会在文中的π的小数四位+编辑当年年份后两位 行首字加入博客名称为了防盗。  一、贝叶斯$$ P(c|x)= \frac{P(c)P(x|c) }{P(x)} $$    x：样本c：类标记  贝叶斯">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E6%9C%B4%E7%B4%A0%E8%B4%9D%E5%8F%B6%E6%96%AF%E3%80%91%E5%8E%9F%E7%90%86%E7%AE%80%E8%BF%B0%E4%B8%8E%E6%8B%BC%E5%86%99%E7%BA%A0%E6%AD%A3%E6%A1%88%E4%BE%8B&#x2F;%E6%AD%A3%E6%80%81%E5%88%86%E5%B8%83%E5%85%AC%E5%BC%8F.jpg">
+<meta property="og:updated_time" content="2019-11-02T09:57:20.762Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E6%9C%B4%E7%B4%A0%E8%B4%9D%E5%8F%B6%E6%96%AF%E3%80%91%E5%8E%9F%E7%90%86%E7%AE%80%E8%BF%B0%E4%B8%8E%E6%8B%BC%E5%86%99%E7%BA%A0%E6%AD%A3%E6%A1%88%E4%BE%8B&#x2F;%E6%AD%A3%E6%80%81%E5%88%86%E5%B8%83%E5%85%AC%E5%BC%8F.jpg">
+
+<link rel="canonical" href="http://yoursite.com/all/%E3%80%90%E6%9C%B4%E7%B4%A0%E8%B4%9D%E5%8F%B6%E6%96%AF%E3%80%91%E5%8E%9F%E7%90%86%E7%AE%80%E8%BF%B0%E4%B8%8E%E6%8B%BC%E5%86%99%E7%BA%A0%E6%AD%A3%E6%A1%88%E4%BE%8B/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+
+  <title>【朴素贝叶斯】原理简述与拼写纠正案例 | Cao V</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Cao V</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">人间观察笔记</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/all/%E3%80%90%E6%9C%B4%E7%B4%A0%E8%B4%9D%E5%8F%B6%E6%96%AF%E3%80%91%E5%8E%9F%E7%90%86%E7%AE%80%E8%BF%B0%E4%B8%8E%E6%8B%BC%E5%86%99%E7%BA%A0%E6%AD%A3%E6%A1%88%E4%BE%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/touxiang.jpg">
+      <meta itemprop="name" content="cao wei">
+      <meta itemprop="description" content="30岁人类普遍死亡，50岁人生刚刚开始">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Cao V">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          【朴素贝叶斯】原理简述与拼写纠正案例
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2019-11-02 15:04:00 / 修改时间：17:57:20" itemprop="dateCreated datePublished" datetime="2019-11-02T15:04:00+08:00">2019-11-02</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <hr>
+<p>对于贝叶斯公式的推导，本篇不做详述。<br>文章将简单描述下朴素贝叶斯算法作为分类器的原理，最后附上唐宇迪教程中的拼写纠正的示例来展示朴素贝叶斯的工程实现。’<br>虽然是没有水准的学习笔记，但是也是会被盗爬的。我会在文中的π的小数四位+编辑当年年份后两位 行首字加入博客名称为了防盗。</p>
+<hr>
+<h2 id="一、贝叶斯"><a href="#一、贝叶斯" class="headerlink" title="一、贝叶斯"></a>一、贝叶斯</h2><p>$$ P(c|x)= \frac{P(c)P(x|c) }{P(x)} $$  </p>
+<blockquote>
+<p>x：样本<br>c：类标记</p>
+</blockquote>
+<p>贝叶斯 可以将 “后验概率”P(c|x) 转换为 “先验概率”P(c)与P(x|c) 的关系，从而求解。<br>其中P(c)是类“先验概率”，表达各类样本所占比率；<br>P(x|c) 是样本x相对于类标记c的类别条件概率，可以理解为在c的条件下，x发生的概率。由于它涉及到关于x所有属性的联合概率，直接根据样本出现的频率来估计将会遇到严重的困难。（了解详情，请见《机器学习》p148）</p>
+<a id="more"></a> 
+
+<h2 id="二、朴素贝叶斯"><a href="#二、朴素贝叶斯" class="headerlink" title="二、朴素贝叶斯"></a>二、朴素贝叶斯</h2><p>上述我们所说到的求解困难，可以通过假定“属性条件独立”来解决。<br>[人间]属性独立，则不存在上述的联合概率。公式也可以重写为：<br>[观察]</p>
+<p>$$ P(c|x)= \frac{P(c)P(x|c) }{P(x)}   = \frac{P(c)}{P(x)} \prod_{i=1}^{d}P(X_{i}|c) $$</p>
+<blockquote>
+<p>d：属性数目<br>xi：x在第i个属性上的取值</p>
+</blockquote>
+<p>[笔记]由于P(x) 是常量，上式可以暂且写作：</p>
+<p>$$ P(c|x)=  P(c)\prod_{i=1}^{d}P(X_{i}|c) $$</p>
+<p>对每个样本x，选择能让后验概率P(c|x)最大的类别标记，求P(c|x)最大：</p>
+<p>$$ h_{nb}(x) = argmax (c)\prod_{i=1}^{d}P(X_{i}|c) $$</p>
+<blockquote>
+<p>c∈y,类别c是目标target （y）众多类别中的一个。</p>
+</blockquote>
+<p>为求上述公式，需要分别求出P(c)、 P(Xi∣c)</p>
+<ol>
+<li>求P(c)：</li>
+</ol>
+<p>假设训练集数据为D，那么类别c表示为D(c)，有充足的独立同分布样本时，可以求出</p>
+<p>$$ P(c) = \frac{\mid D_{c} \mid }{\mid D \mid} $$</p>
+<ol start="2">
+<li>求P(Xi∣c)</li>
+</ol>
+<p>&emsp; &emsp; 2.1 x为离散属性时，令Dc,xi​​表示Dc第i个属性上取值为xi​的样本组成的集合，则条件概率P(Xi∣c)可估计为</p>
+<p>$$ P(x_{i}|c) = \frac{\mid D_{c,x_{i}}\mid }{\mid D_{c} \mid} $$</p>
+<blockquote>
+<p>这里可能会有个问题，就是若某个属性值在训练集中没有出现过，那么∣Dc,xi​​∣​=0，则P(Xi∣c) = 0。解决方案是”拉普拉斯修正“，详情见《机器学习P153》, 因为我不想再展开讲啦，之后补充一篇放链接吧。</p>
+</blockquote>
+<p>&emsp; &emsp; 2.2 x为连续属性时，<strong>假定P(Xi∣c) 服从正态分布</strong>，其中μ、σ是第c类样本在第i个属性上取得的均值和方差。</p>
+<p>$$ P(x_{i}|c) = \frac{1}{\sqrt{ 2 \pi \sigma_{c,i}}} exp \left ( - \frac {(x_{i} - \mu_{c,i}) ^{2}} {2\sigma _{c,i}^{2}} \right ) $$</p>
+<blockquote>
+<p>这里这个假定是贝叶斯派参数估计的立论点，根据不同的假定，可以有不同的参数估计方法。所以应用场景中，数据是否符合某个假定条件的分布，是选择算法需要注意的一点。</p>
+</blockquote>
+<blockquote>
+<p>补充正态分布的公式：</p>
+<img src="/all/%E3%80%90%E6%9C%B4%E7%B4%A0%E8%B4%9D%E5%8F%B6%E6%96%AF%E3%80%91%E5%8E%9F%E7%90%86%E7%AE%80%E8%BF%B0%E4%B8%8E%E6%8B%BC%E5%86%99%E7%BA%A0%E6%AD%A3%E6%A1%88%E4%BE%8B/%E6%AD%A3%E6%80%81%E5%88%86%E5%B8%83%E5%85%AC%E5%BC%8F.jpg" class="" title="图片-正态分布公式">
+</blockquote>
+<hr>
+<h2 id="三、案例-拼写纠正"><a href="#三、案例-拼写纠正" class="headerlink" title="三、案例-拼写纠正"></a>三、案例-拼写纠正</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 目的：设计拼写纠正程序</span></span><br><span class="line"><span class="comment"># 材料：词库《big.txt》, 里面放了很多文章、新闻。</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 代码需要求出朴素贝叶斯 公式如下# 求解：argmaxc P(c|w) -&gt; argmaxc P(w|c) P(c) / P(w)</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># P(c), 文章中出现一个正确拼写词 c 的概率, 也就是说, 在英语文章中, c 出现的概率有多大</span></span><br><span class="line"><span class="comment"># P(w|c), 在用户想键入 c 的情况下敲成 w 的概率. 因为这个是代表用户会以多大的概率把 c 敲错成 w</span></span><br><span class="line"><span class="comment"># argmaxc, 用来枚举所有可能的 c 并且选取概率最大的</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 总体思路是</span></span><br><span class="line"><span class="comment"># 01 算出来词库中所有正确词的频数; --&gt;P(c)</span></span><br><span class="line"><span class="comment"># 02 算出这个词中编辑距离为1、2 的所有词（正确的错误的都有）; --&gt; P(w|c)</span></span><br><span class="line"><span class="comment"># 03 把上面的词和词库中已有的正确的词去碰，选出碰到 + 词库中频数最多的词; --&gt;argmaxc</span></span><br><span class="line"><span class="comment">#     03.01 优先去碰编辑距离为1，然后再去碰编辑距离为2的词;</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># 00 导入词库</span></span><br><span class="line">file_path = <span class="string">'.../'</span></span><br><span class="line"></span><br><span class="line">NWORDS = train(words(open(file_path + <span class="string">'big.txt'</span>).read()))NWORDS</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># 01.统计语料库中词频，每个单词以及每个单词出现的频数</span></span><br><span class="line"><span class="comment"># --把语料中的单词全部抽取出来, 转成小写, 并且去除单词中间的特殊符号</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">words</span><span class="params">(text)</span>:</span> <span class="keyword">return</span> re.findall(<span class="string">'[a-z]+'</span>, text.lower())</span><br><span class="line"></span><br><span class="line"> <span class="comment"># --要是遇到我们从来没有过见过的新词怎么办.</span></span><br><span class="line"> <span class="comment"># --假如说一个词拼写完全正确, 但是语料库中没有包含这个词,</span></span><br><span class="line"> <span class="comment"># --从而这个词也永远不会出现在训练集中.</span></span><br><span class="line"> <span class="comment"># --于是, 我们就要返回出现这个词的概率是0.</span></span><br><span class="line"> <span class="comment"># --, 因为概率为0这个代表了这个事件绝对不可能发生,</span></span><br><span class="line"> <span class="comment"># --而在我们的概率模型中, 我们期望用一个很小的概率来代表这种情况. lambda: 1</span></span><br><span class="line"> <span class="comment"># --这就是拉普拉斯修正法的基本思路</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">train</span><span class="params">(features)</span>:</span>    </span><br><span class="line">    model = collections.defaultdict(<span class="keyword">lambda</span>: <span class="number">1</span>)    </span><br><span class="line">    <span class="keyword">for</span> f <span class="keyword">in</span> features:       </span><br><span class="line">        model[f] += <span class="number">1</span>   </span><br><span class="line">    <span class="keyword">return</span> model</span><br><span class="line">    </span><br><span class="line"></span><br><span class="line"><span class="comment"># 02.</span></span><br><span class="line"><span class="comment"># 编辑距离:# 两个词之间的编辑距离定义为使用了几次插入(在词中插入一个单字母),</span></span><br><span class="line"><span class="comment"># 删除(删除一个单字母), 交换(交换相邻两个字母), 替换(把一个字母换成另一个)的操作从一个词变到另一个词.</span></span><br><span class="line"><span class="comment"># 得出来单词不一定是正确单词，只是粗暴的组合</span></span><br><span class="line"></span><br><span class="line">alphabet = <span class="string">'abcdefghijklmnopqrstuvwxyz'</span></span><br><span class="line"></span><br><span class="line"><span class="comment">#返回所有与单词 w 编辑距离为 1 的集合o; 通过遍历的方式粗暴组合</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">edits1</span><span class="params">(word)</span>:</span>    </span><br><span class="line">    n = len(word)    </span><br><span class="line">    <span class="keyword">return</span> set([word[<span class="number">0</span>:i]+word[i+<span class="number">1</span>:] <span class="keyword">for</span> i <span class="keyword">in</span> range(n)] +                     </span><br><span class="line">    <span class="comment"># deletion                           </span></span><br><span class="line">    [word[<span class="number">0</span>:i]+word[i+<span class="number">1</span>]+word[i]+word[i+<span class="number">2</span>:] <span class="keyword">for</span> i <span class="keyword">in</span> range(n<span class="number">-1</span>)] + </span><br><span class="line">    <span class="comment"># transpositin               </span></span><br><span class="line">    [word[<span class="number">0</span>:i]+c+word[i+<span class="number">1</span>:] <span class="keyword">for</span> i <span class="keyword">in</span> range(n) <span class="keyword">for</span> c <span class="keyword">in</span> alphabet] + </span><br><span class="line">    <span class="comment"># alteration</span></span><br><span class="line">    [word[<span class="number">0</span>:i]+c+word[i:] <span class="keyword">for</span> i <span class="keyword">in</span> range(n+<span class="number">1</span>) <span class="keyword">for</span> c <span class="keyword">in</span> alphabet])  </span><br><span class="line">    <span class="comment"># insertion</span></span><br><span class="line"></span><br><span class="line"><span class="comment">#返回所有与单词 w 编辑距离为 2 的集合</span></span><br><span class="line"><span class="comment">#在这些编辑距离小于2的词中间, 只把那些正确的词作为候选词</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">edits2</span><span class="params">(word)</span>:</span>    </span><br><span class="line">    <span class="keyword">return</span> set(e2 <span class="keyword">for</span> e1 <span class="keyword">in</span> edits1(word) <span class="keyword">for</span> e2 <span class="keyword">in</span> edits1(e1))</span><br><span class="line"></span><br><span class="line"><span class="comment"># 优化:在这些编辑距离小于2的词中间, 只把那些正确的词作为候选词,</span></span><br><span class="line"></span><br><span class="line"><span class="comment">#03</span></span><br><span class="line"><span class="comment">#如果known(set)非空, candidate 就会选取这个集合, 而不继续计算后面的</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">known</span><span class="params">(words)</span>:</span> <span class="keyword">return</span> set(w <span class="keyword">for</span> w <span class="keyword">in</span> words <span class="keyword">if</span> w <span class="keyword">in</span> NWORDS)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 正常来说把一个元音拼成另一个的概率要大于辅音 (因为人常常把 hello 打成 hallo 这样);</span></span><br><span class="line"><span class="comment"># 把单词的第一个字母拼错的概率会相对小, 等等.但是为了简单起见, 选择了一个简单的方法:</span></span><br><span class="line"><span class="comment"># 编辑距离为1的正确单词比编辑距离为2的优先级高, 而编辑距离为0的正确单词优先级比编辑距离为1的高.</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">correct</span><span class="params">(word)</span>:</span>    </span><br><span class="line">    candidates = known([word]) <span class="keyword">or</span> known(edits1(word)) <span class="keyword">or</span> known(edits2(word)) <span class="keyword">or</span> [word]    </span><br><span class="line">    <span class="keyword">return</span> max(candidates, key=<span class="keyword">lambda</span> w: NWORDS[w])</span><br><span class="line"><span class="comment"># --known([word]) or known(edits1(word)) or known(edits2(word)) or [word]</span></span><br><span class="line"><span class="comment"># --known([word])是遍历词库，如果词库中有这个词，直接输出，没有进入or后面的，编辑距离为1的推测出的词，没有进入后面编辑距离为2的推测出的词，再没有就输出'word'本身</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 尝试：</span></span><br><span class="line">correct(<span class="string">'something'</span>)</span><br><span class="line">correct(<span class="string">'morow'</span>)</span><br><span class="line">correct(<span class="string">'juicy'</span>)</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </div>
+
+    
+    
+    
+        
+
+<div>
+<ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者： </strong>cao wei
+  </li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    <a href="http://yoursite.com/all/%E3%80%90%E6%9C%B4%E7%B4%A0%E8%B4%9D%E5%8F%B6%E6%96%AF%E3%80%91%E5%8E%9F%E7%90%86%E7%AE%80%E8%BF%B0%E4%B8%8E%E6%8B%BC%E5%86%99%E7%BA%A0%E6%AD%A3%E6%A1%88%E4%BE%8B/" title="【朴素贝叶斯】原理简述与拼写纠正案例">http://yoursite.com/all/%E3%80%90%E6%9C%B4%E7%B4%A0%E8%B4%9D%E5%8F%B6%E6%96%AF%E3%80%91%E5%8E%9F%E7%90%86%E7%AE%80%E8%BF%B0%E4%B8%8E%E6%8B%BC%E5%86%99%E7%BA%A0%E6%AD%A3%E6%A1%88%E4%BE%8B/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/null" rel="noopener" target="_blank"><i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+
+      <footer class="post-footer">
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/other/my-first-post/" rel="next" title="My first post">
+                  <i class="fa fa-chevron-left"></i> My first post
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/all/%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0/" rel="prev" title="【自然语言】新闻分类part1--基础知识点与实现">
+                  【自然语言】新闻分类part1--基础知识点与实现 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#一、贝叶斯"><span class="nav-number">1.</span> <span class="nav-text">一、贝叶斯</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#二、朴素贝叶斯"><span class="nav-number">2.</span> <span class="nav-text">二、朴素贝叶斯</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#三、案例-拼写纠正"><span class="nav-number">3.</span> <span class="nav-text">三、案例-拼写纠正</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="cao wei"
+    src="/images/touxiang.jpg">
+  <p class="site-author-name" itemprop="name">cao wei</p>
+  <div class="site-description" itemprop="description">30岁人类普遍死亡，50岁人生刚刚开始</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+        <span class="site-state-item-count">1</span>
+        <span class="site-state-item-name">分类</span>
+      </div>
+      <div class="site-state-item site-state-tags">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">标签</span>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="/vivi.777@qq.com" title="E-Mail &amp;rarr; vivi.777@qq.com"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+  </div>
+  <div class="cc-license motion-element" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/null" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">cao wei</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.5.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+<script src="/js/utils.js"></script><script src="/js/motion.js"></script>
+<script src="/js/schemes/pisces.js"></script>
+<script src="/js/next-boot.js"></script>
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+      
+<script type="text/x-mathjax-config">
+
+  MathJax.Hub.Config({
+    tex2jax: {
+      inlineMath: [ ['$', '$'], ['\\(', '\\)'] ],
+      processEscapes: true,
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    },
+    TeX: {
+      equationNumbers: {
+        autoNumber: 'AMS'
+      }
+    }
+  });
+
+  MathJax.Hub.Register.StartupHook('TeX Jax Ready', function() {
+    MathJax.InputJax.TeX.prefilterHooks.Add(function(data) {
+      if (data.display) {
+        var next = data.script.nextSibling;
+        while (next && next.nodeName.toLowerCase() === '#text') {
+          next = next.nextSibling;
+        }
+        if (next && next.nodeName.toLowerCase() === 'br') {
+          next.parentNode.removeChild(next);
+        }
+      }
+    });
+  });
+
+  MathJax.Hub.Queue(function() {
+    var all = MathJax.Hub.getAllJax(), i;
+    for (i = 0; i < all.length; i += 1) {
+      element = document.getElementById(all[i].inputID + '-Frame').parentNode;
+      if (element.nodeName.toLowerCase() == 'li') {
+        element = element.parentNode;
+      }
+      element.classList.add('has-jax');
+    }
+  });
+</script>
+<script>
+  NexT.utils.getScript('//cdn.jsdelivr.net/npm/mathjax@2/MathJax.js?config=TeX-AMS-MML_HTMLorMML', () => {
+    MathJax.Hub.Typeset();
+  }, window.MathJax);
+</script>
+
+    
+
+  
+
+</body>
+</html>

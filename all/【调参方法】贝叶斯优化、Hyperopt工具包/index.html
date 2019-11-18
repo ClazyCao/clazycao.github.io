@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+  <link rel="alternate" href="/atom.xml" title="Cao V" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.5.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="学习记录，权当笔记，笔者不才，纰漏多多，还请包涵  &amp;emsp;调参工具人，今天又来学习新的调参方法啦，正好也学一下超参数相关概念。　本次学习除网格调参、随机调参之外的第三种调参方法：贝叶斯优化。　分两篇来总结，part1 用多项式求最小的例子，看下工程上实现的步骤；part2，用保险数据的案例，看下工作场景下，怎么使用贝叶斯优化。 　这篇是第一篇。  原理　　我也没能完全理解，不班门  弄斧了。">
+<meta name="keywords" content="机器学习">
+<meta property="og:type" content="article">
+<meta property="og:title" content="【调参方法】贝叶斯优化、Hyperopt工具包">
+<meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;index.html">
+<meta property="og:site_name" content="Cao V">
+<meta property="og:description" content="学习记录，权当笔记，笔者不才，纰漏多多，还请包涵  &amp;emsp;调参工具人，今天又来学习新的调参方法啦，正好也学一下超参数相关概念。　本次学习除网格调参、随机调参之外的第三种调参方法：贝叶斯优化。　分两篇来总结，part1 用多项式求最小的例子，看下工程上实现的步骤；part2，用保险数据的案例，看下工作场景下，怎么使用贝叶斯优化。 　这篇是第一篇。  原理　　我也没能完全理解，不班门  弄斧了。">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E7%9B%AE%E6%A0%87%E5%87%BD%E6%95%B0%E5%9B%BE%E5%83%8F.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E6%9F%B1%E5%BD%A2%E5%9B%BE-%E6%A0%B7%E6%9C%ACx%E9%A2%91%E6%95%B0.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E5%89%8D500%E6%AC%A1%E8%BF%AD%E4%BB%A3x%E5%8F%98%E5%8C%96.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E5%90%8E500%E6%AC%A1%E8%BF%AD%E4%BB%A3x%E5%8F%98%E5%8C%96.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E6%95%A3%E7%82%B9%E5%9B%BE-x%E5%8F%96%E5%80%BC%E6%95%A3%E7%82%B9%E5%9B%BE.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E6%9F%B1%E5%BD%A2%E5%9B%BE-x%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E5%88%86%E7%AE%B1.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E6%95%A3%E7%82%B9%E5%9B%BE-x%E5%8F%96%E5%80%BC%E6%95%A3%E7%82%B9%E5%9B%BErand.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E6%9F%B1%E5%BD%A2%E5%9B%BE-x%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E5%88%86%E7%AE%B1rand.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E6%9F%B1%E5%BD%A2%E5%9B%BE-%E6%AD%A3%E6%80%81%E5%88%86%E5%B8%83%E6%A0%B7%E6%9C%ACx%E9%A2%91%E6%95%B0.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E6%9F%B1%E5%BD%A2%E5%9B%BE-x%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E5%88%86%E7%AE%B1%E6%AD%A3%E6%80%81%E5%88%86%E5%B8%83.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E6%8A%98%E7%BA%BF%E5%9B%BE-%E5%AF%B9%E6%AF%94%E4%B8%8D%E5%90%8C%E7%9A%84space.png">
+<meta property="og:updated_time" content="2019-11-15T09:12:34.155Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;all&#x2F;%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85&#x2F;%E7%9B%AE%E6%A0%87%E5%87%BD%E6%95%B0%E5%9B%BE%E5%83%8F.png">
+
+<link rel="canonical" href="http://yoursite.com/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+
+  <title>【调参方法】贝叶斯优化、Hyperopt工具包 | Cao V</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Cao V</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">人间观察笔记</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/touxiang.jpg">
+      <meta itemprop="name" content="cao wei">
+      <meta itemprop="description" content="30岁人类普遍死亡，50岁人生刚刚开始">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Cao V">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          【调参方法】贝叶斯优化、Hyperopt工具包
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2019-11-15 16:43:01 / 修改时间：17:12:34" itemprop="dateCreated datePublished" datetime="2019-11-15T16:43:01+08:00">2019-11-15</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><strong>学习记录，权当笔记，笔者不才，纰漏多多，还请包涵</strong></p>
+<hr>
+<p>&emsp;调参工具人，今天又来学习新的调参方法啦，正好也学一下超参数相关概念。<br>　本次学习除网格调参、随机调参之外的第三种调参方法：贝叶斯优化。<br>　分两篇来总结，part1 用多项式求最小的例子，看下工程上实现的步骤；part2，用保险数据的案例，看下工作场景下，怎么使用贝叶斯优化。<br> 　这篇是第一篇。</p>
+<hr>
+<h3 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h3><p>　　我也没能完全理解，不班门  弄斧了。放一些参考链接吧：</p>
+<p><a href="https://app.sigopt.com/static/pdf/SigOpt_Bayesian_Optimization_Primer.pdf" target="_blank" rel="noopener">贝叶斯优化参考</a><br><a href="https://jaberg.github.io/hyperopt/" target="_blank" rel="noopener">Hyperopt的官方文档</a>（也是基于github page做的网站)</p>
+<h3 id="通俗理解"><a href="#通俗理解" class="headerlink" title="通俗理解"></a>通俗理解</h3><h4 id="贝叶斯优化所需四大部分："><a href="#贝叶斯优化所需四大部分：" class="headerlink" title="贝叶斯优化所需四大部分："></a>贝叶斯优化所需四大部分：</h4><ol>
+<li>Objective 目标函数</li>
+<li>Domain space: 指定参数空间</li>
+<li>Hyperparameter optimization function: 可以选择的采样算法，随机或者贝叶斯优化</li>
+<li>Trials: 记录结果的保存</li>
+</ol>
+<h4 id="解释"><a href="#解释" class="headerlink" title="解释"></a>解释</h4><ol>
+<li>第一轮参数估计，基于贝叶斯的先验理论，先指定参数的范围，通过采样，去求目标函数，得出一个粗糙的函数图像，基于粗糙的图像轮廓，估计最值的出现范围；</li>
+<li>第二轮参数估计，基于上轮结果，缩小了参数的取值范围，再进行采样，求目标函数，去更新目标函数图像；</li>
+<li>第三轮……<br>.<br>.<br>.<br>相信有人跟我的疑惑一样，如果第一轮就选错了，很可能就把极值当作最值点优化。<br>贝叶斯优化的解决方案是，在进入新一轮迭代的时候，也会随机选择一些参数范围以外的值，去采样“探索”。</li>
+</ol>
+<a id="more"></a>
+
+<h3 id="安装包和版本兼容问题"><a href="#安装包和版本兼容问题" class="headerlink" title="安装包和版本兼容问题"></a>安装包和版本兼容问题</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">pip install hyperopt</span><br><span class="line">pip uninstall networkx</span><br><span class="line">pip install networkx==<span class="number">1.11</span></span><br></pre></td></tr></table></figure>
+<p>&emsp;&emsp;networkx 1.1版本才兼容，我的版本是2.4，所以卸载重装。<br>&emsp;&emsp;直接cmd , cd到当前项目的script文件夹里面上述执行命令。</p>
+<h3 id="多项式案例"><a href="#多项式案例" class="headerlink" title="多项式案例"></a>多项式案例</h3><h4 id="先导入常用包"><a href="#先导入常用包" class="headerlink" title="先导入常用包"></a>先导入常用包</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> matplotlib.pyplot <span class="keyword">as</span> plt</span><br><span class="line"><span class="keyword">import</span> seaborn <span class="keyword">as</span> sns</span><br><span class="line"><span class="keyword">import</span> pandas <span class="keyword">as</span> pd</span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line">pd.set_option(<span class="string">'display.max_columns'</span>, <span class="number">100</span>)</span><br></pre></td></tr></table></figure>
+<p><strong><center>|-我们在2中所说到，贝叶斯优化所需要的四大部分，我们一项一项来实现。-|</center></strong></p>
+<h4 id="Objective-目标函数"><a href="#Objective-目标函数" class="headerlink" title="Objective 目标函数"></a>Objective 目标函数</h4><ol>
+<li>随意生成一个多项式函数objective，这个多项式需要有最小值，以便我们后面求最小。</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">objective</span><span class="params">(x)</span>:</span>    </span><br><span class="line">    f = np.poly1d([<span class="number">1</span>, <span class="number">-2</span>, <span class="number">-28</span>, <span class="number">28</span>, <span class="number">12</span>, <span class="number">-26</span>, <span class="number">100</span>])  <span class="comment">#随机 生成一个多项式，应该是1x6次方+ (-2)x5次方…………+100    </span></span><br><span class="line">    <span class="comment"># Return the value of the polynomial   </span></span><br><span class="line">    <span class="keyword">return</span> f(x) * <span class="number">0.05</span></span><br></pre></td></tr></table></figure>
+<p>&emsp;&emsp;np.poly1d这个函数第一次见，查了一下：</p>
+<blockquote>
+<h5 id="numpy-poly1d-官方文档"><a href="#numpy-poly1d-官方文档" class="headerlink" title="numpy.poly1d     官方文档"></a>numpy.poly1d     <a href="https://docs.scipy.org/doc/numpy/reference/generated/numpy.poly1d.html#numpy.poly1d" target="_blank" rel="noopener">官方文档</a></h5><p><strong><em>class numpy.poly1d(c_or_r, r=False, variable=None)</em></strong><br>一种生成多项式的函数，主要参数是三个。<br><strong><em>Parameters:</em></strong><br><strong><em>c_or_r : array_like</em></strong><br>&emsp;The polynomial’s coefficients, in decreasing powers, or if the<br>value of the second parameter is True, the polynomial’s roots (values<br>where the polynomial evaluates to 0).<br>&emsp;For example, poly1d([1, 2, 3]) returns an object that represents x^2 + 2x + 3, whereas poly1d([1, 2, 3], True) returns one that represents (x-1)(x-2)(x-3) = x^3 - 6x^2 + 11x -6.<br><strong><em>r : bool, optional</em></strong><br>If True, c_or_r specifies the polynomial’s roots; the default is False.<br>True的话就是未展开的多项式设定，默认False。<br><strong><em>variable : str, optional</em></strong><br>Changes the variable used when printing p from x to variable .<br>就是把多项式里面的x换成任何指定的变量符号，比如z。</p>
+</blockquote>
+<ol start="2">
+<li>生成样本。</li>
+</ol>
+<p>&emsp;&emsp;指定在 -5~6 之间采1w个样本。<br>　　求1w个样本里的最小值。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">x = np.linspace(<span class="number">-5</span>, <span class="number">6</span>, <span class="number">10000</span>)   <span class="comment"># -5~6 上选10000个点进行采样</span></span><br><span class="line">y = objective(x) </span><br><span class="line">miny = min(y)</span><br><span class="line">minx = x[np.argmin(y)]</span><br></pre></td></tr></table></figure>
+<p>&emsp;&emsp;画图看下多项式函数y的图像。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">plt.figure(figsize = (<span class="number">8</span>, <span class="number">6</span>))</span><br><span class="line">plt.style.use(<span class="string">'fivethirtyeight'</span>)</span><br><span class="line">plt.title(<span class="string">'Objective Function'</span>);plt.xlabel(<span class="string">'x'</span>); plt.ylabel(<span class="string">'f(x)'</span>)</span><br><span class="line">plt.vlines(minx, min(y)- <span class="number">50</span>, max(y), linestyles = <span class="string">'--'</span>, colors = <span class="string">'r'</span>)plt.plot(x, y);</span><br><span class="line">plt.show()</span><br></pre></td></tr></table></figure>
+
+<img src="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/%E7%9B%AE%E6%A0%87%E5%87%BD%E6%95%B0%E5%9B%BE%E5%83%8F.png" class="" title="图片-目标函数图像">
+
+<p>&emsp;&emsp;从图像可以看出来，x = 5附近时候出现了最小值，那么我们求一下，具体的值。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">print(<span class="string">'Minimum of %0.4f occurs at %0.4f'</span> % (miny, minx))</span><br></pre></td></tr></table></figure>
+
+<p>&emsp;&emsp;结果是：Minimum of -219.8012 occurs at 4.8779。<br>　　那么我们的优化目标就是，在x=4.8779, min(y)=-219.8012<br>　　案例为了方便演示，已经将最小值求得，当然在平时工作中，不太可能直接求出最小。</p>
+<h4 id="Domain-space-指定参数空间"><a href="#Domain-space-指定参数空间" class="headerlink" title="Domain space: 指定参数空间"></a>Domain space: 指定参数空间</h4><ol>
+<li>指定参数范围 -5~6</li>
+</ol>
+<p>&emsp;&emsp;我们生成的样本, x 就是在 -5~6 的区间，所以首次参数空间也指定在这个区间  。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> hyperopt <span class="keyword">import</span> hp</span><br><span class="line">space = hp.uniform(<span class="string">'x'</span>, <span class="number">-5</span>, <span class="number">6</span>)</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>space 不仅可以uniform由小到大选择，还可以根据假设分布去估计。<br>虽然这里叉出去没什么大必要，但是我还是去搜了下。。。<br>点击这里打开<a href="https://github.com/jaberg/hyperopt/wiki/FMin" target="_blank" rel="noopener">官方文档</a><br>里面2.1 Parameter Expressions<br>介绍了参数空间的一些选择</p>
+</blockquote>
+<ol start="2">
+<li><p>指定采样次数</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> hyperopt.pyll.stochastic <span class="keyword">import</span> sample</span><br><span class="line"></span><br><span class="line">samples = []  <span class="comment">#用来装采样出来的样本</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> _ <span class="keyword">in</span> range(<span class="number">10000</span>):  <span class="comment">#采1w个样本    </span></span><br><span class="line">    samples.append(sample(space))</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>等宽给x分箱，用柱状图看下我们 从 x 在 -5~6 之间采样出来的样本，频数分布怎么样，是否均匀</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">plt.hist(samples, bins = <span class="number">20</span>, edgecolor = <span class="string">'black'</span>);</span><br><span class="line">plt.xlabel(<span class="string">'x'</span>); plt.ylabel(<span class="string">'Frequency'</span>); plt.title(<span class="string">'Domain Space'</span>);</span><br><span class="line">plt.show()</span><br></pre></td></tr></table></figure>
+
+
+</li>
+</ol>
+<img src="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/%E6%9F%B1%E5%BD%A2%E5%9B%BE-%E6%A0%B7%E6%9C%ACx%E9%A2%91%E6%95%B0.png" class="" title="图片-柱形图-样本x频数">
+
+
+
+<h4 id="Hyperparameter-optimization-function-可以选择的采样算法，随机或者贝叶斯优化"><a href="#Hyperparameter-optimization-function-可以选择的采样算法，随机或者贝叶斯优化" class="headerlink" title="Hyperparameter optimization function: 可以选择的采样算法，随机或者贝叶斯优化"></a>Hyperparameter optimization function: 可以选择的采样算法，随机或者贝叶斯优化</h4><p>&emsp;&emsp;我们通过hyperopt选择两种采样算法，一种贝叶斯优化，一种随机，后面详细比较两种算法之间的差异。<br>　　两种算法之间没有绝对的孰优孰劣，只是特点不同，适用面不同。这个后面会说到。<br>  　　上面我们说到的四个步骤，03 algo 与 04 trals，都是先实例化出来，然后进fmin函数。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> hyperopt <span class="keyword">import</span> rand, tpe  <span class="comment">#rand是随机调参，tpe是贝叶斯优化；两种都导入，后面比较一下两种算法</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># -实例化</span></span><br><span class="line">tpe_algo = tpe.suggest</span><br><span class="line">rand_algo = rand.suggest</span><br></pre></td></tr></table></figure>
+<h4 id="Trials-记录结果的保存"><a href="#Trials-记录结果的保存" class="headerlink" title="Trials: 记录结果的保存"></a>Trials: 记录结果的保存</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> hyperopt <span class="keyword">import</span>  Trials</span><br><span class="line"><span class="comment"># -实例化</span></span><br><span class="line">tpe_trials = Trials()</span><br><span class="line">rand_trials = Trials()</span><br></pre></td></tr></table></figure>
+
+<h4 id="fmin"><a href="#fmin" class="headerlink" title="fmin"></a>fmin</h4><ol>
+<li>tpe</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> hyperopt <span class="keyword">import</span> fmin</span><br><span class="line">tpe_best = fmin(fn = objective,                </span><br><span class="line">                      space = space ,                </span><br><span class="line">                      algo= tpe_algo ,               </span><br><span class="line">                      trials= tpe_trials ,                </span><br><span class="line">                      max_evals= <span class="number">2000</span> ,  <span class="comment"># max_evals= 最多执行次数               </span></span><br><span class="line">                      rstate= np.random.RandomState(<span class="number">50</span>)  <span class="comment">#指定随机种子                </span></span><br><span class="line">                      )</span><br><span class="line">print(tpe_best)</span><br></pre></td></tr></table></figure>
+<p>&emsp;&emsp;运行fmin函数，控制台里 直接进度条开始运行：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">100%|██████████| 2000/2000 [00:21&lt;00:00, 91.14it/s, best loss: -219.80118811219114]</span><br><span class="line">&#123;&apos;x&apos;: 4.878481851906148&#125;</span><br></pre></td></tr></table></figure>
+
+<ol start="2">
+<li>rand<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">rand_best = fmin(fn=objective,                </span><br><span class="line">                       space=space,                </span><br><span class="line">                       algo=rand_algo,                </span><br><span class="line">                       trials=rand_trials,                 </span><br><span class="line">                       max_evals=<span class="number">2000</span>,                </span><br><span class="line">                       rstate= np.random.RandomState(<span class="number">50</span>)                 </span><br><span class="line">                       )</span><br><span class="line">print(rand_best)</span><br></pre></td></tr></table></figure>
+&emsp;&emsp; 控制台：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">100%|██████████| 2000/2000 [00:03&lt;00:00, 556.97it/s, best loss: -219.80116907646868]</span><br><span class="line">&#123;&apos;x&apos;: 4.877613189834774&#125;</span><br></pre></td></tr></table></figure>
+&emsp;&emsp;其实通过运行耗时，我们发现，tpe比rand耗时长很多，这和我们算法的基本目的“效率”好像是背道而驰的。<br>　　首先，我们来看下原因。tpe在 [2，通俗解释] 里面提到的，每轮迭代，tpe都会根据结果做判断，下次迭代里重新选择参数范围。这导致了耗时长。<br>　　不过这种耗时是可被接受的，因为tpe相比rand单次“训练”耗时长，不过tpe可以在单次“训练”中完成rand多次“训练”所完成的工作，总结来说，就是：tpe单次时间长，次数（可能）少；rand单次时间短，次数（可能）多。我们在复杂的机器学习中，重复的重新选择参数是很耗时的，所以我们宁愿单次训练时间长，人工调整时间短。<br>　　这就是前文所说的，tpe和rand的适用面不同。</li>
+</ol>
+<h4 id="贝叶斯优化，在每次迭代中，发生了什么"><a href="#贝叶斯优化，在每次迭代中，发生了什么" class="headerlink" title="贝叶斯优化，在每次迭代中，发生了什么"></a>贝叶斯优化，在每次迭代中，发生了什么</h4><p>&emsp;&emsp;我们之前把迭代结果存放 tpe_trials 和 rand_trials 里面。现在我们看从 结果里面回溯迭代过程。</p>
+<ol>
+<li>我们将损失函数结果’loss’、迭代次数’iteration’、x取值’x’  pd.Dataframe一下。</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">tpe_results = pd.DataFrame(</span><br><span class="line">                                    &#123;<span class="string">'loss'</span>: [x[<span class="string">'loss'</span>] <span class="keyword">for</span> x <span class="keyword">in</span> tpe_trials.results],                            </span><br><span class="line">                                     <span class="string">'iteration'</span>: tpe_trials.idxs_vals[<span class="number">0</span>][<span class="string">'x'</span>],                            </span><br><span class="line">                                      <span class="string">'x'</span>: tpe_trials.idxs_vals[<span class="number">1</span>][<span class="string">'x'</span>]&#125;</span><br><span class="line">                                      )</span><br><span class="line">tpe_results.head(<span class="number">10</span>)</span><br></pre></td></tr></table></figure>
+<p>&emsp;&emsp;dataframe的前十行。</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>loss</th>
+<th>iteration</th>
+<th>x</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>36.210073</td>
+<td>0</td>
+<td>5.957885</td>
+</tr>
+<tr>
+<td>1</td>
+<td>-202.384052</td>
+<td>1</td>
+<td>4.470885</td>
+</tr>
+<tr>
+<td>2</td>
+<td>-75.519449</td>
+<td>2</td>
+<td>3.218963</td>
+</tr>
+<tr>
+<td>3</td>
+<td>5.543552</td>
+<td>3</td>
+<td>-0.515859</td>
+</tr>
+<tr>
+<td>4</td>
+<td>35.078011</td>
+<td>4</td>
+<td>-4.916832</td>
+</tr>
+<tr>
+<td>5</td>
+<td>5.027404</td>
+<td>5</td>
+<td>-0.845634</td>
+</tr>
+<tr>
+<td>6</td>
+<td>-5.263738</td>
+<td>6</td>
+<td>1.953339</td>
+</tr>
+<tr>
+<td>7</td>
+<td>-16.661503</td>
+<td>7</td>
+<td>-1.986542</td>
+</tr>
+<tr>
+<td>8</td>
+<td>4.450530</td>
+<td>8</td>
+<td>0.825648</td>
+</tr>
+<tr>
+<td>9</td>
+<td>-75.457577</td>
+<td>9</td>
+<td>3.218281</td>
+</tr>
+</tbody></table>
+<ol start="2">
+<li>我们通过rolling移动窗口，每50个计算一下x，loss的均值。</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">tpe_results[&apos;rolling_avg_x&apos;] = tpe_results[&apos;x&apos;].rolling(50).mean().fillna(method = &apos;bfill&apos;)</span><br><span class="line">tpe_results[&apos;rolling_avg_loss&apos;] = tpe_results[&apos;loss&apos;].rolling(50).mean().fillna(method = &apos;bfill&apos;)</span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>loss</th>
+<th>iteration</th>
+<th>x</th>
+<th>rolling_avg_x</th>
+<th>rolling_avg_loss</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>36.210073</td>
+<td>0</td>
+<td>5.957885</td>
+<td>2.105103</td>
+<td>-74.393795</td>
+</tr>
+<tr>
+<td>1</td>
+<td>-202.384052</td>
+<td>1</td>
+<td>4.470885</td>
+<td>2.105103</td>
+<td>-74.393795</td>
+</tr>
+<tr>
+<td>2</td>
+<td>-75.519449</td>
+<td>2</td>
+<td>3.218963</td>
+<td>2.105103</td>
+<td>-74.393795</td>
+</tr>
+<tr>
+<td>3</td>
+<td>5.543552</td>
+<td>3</td>
+<td>-0.515859</td>
+<td>2.105103</td>
+<td>-74.393795</td>
+</tr>
+<tr>
+<td>4</td>
+<td>35.078011</td>
+<td>4</td>
+<td>-4.916832</td>
+<td>2.105103</td>
+<td>-74.393795</td>
+</tr>
+</tbody></table>
+<p>&emsp;&emsp;2000行数据太长，我想看一下参数调整的折线图，参数是否随着真的是聚拢的。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">plt.figure(figsize = (<span class="number">6</span>, <span class="number">4</span>))</span><br><span class="line">plt.title(<span class="string">'avg_x'</span>); plt.xlabel(<span class="string">'iteration'</span>); plt.ylabel(<span class="string">'rolling_avg_x'</span>)</span><br><span class="line">plt.vlines(tpe_results[<span class="string">'iteration'</span>][:<span class="number">500</span>], ymin= <span class="number">2</span>, ymax= <span class="number">6</span>, colors = <span class="string">'w'</span>)</span><br><span class="line">plt.plot(tpe_results[<span class="string">'iteration'</span>][:<span class="number">500</span>], </span><br><span class="line">tpe_results[<span class="string">'rolling_avg_x'</span>][:<span class="number">500</span>]);</span><br><span class="line">plt.show()</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">plt.figure(figsize = (<span class="number">6</span>, <span class="number">4</span>))</span><br><span class="line">plt.title(<span class="string">'avg_x'</span>); plt.xlabel(<span class="string">'iteration'</span>); plt.ylabel(<span class="string">'rolling_avg_x'</span>)</span><br><span class="line">plt.vlines(tpe_results[<span class="string">'iteration'</span>][<span class="number">1500</span>:<span class="number">2000</span>], ymin= <span class="number">2</span>, ymax= <span class="number">6</span>, colors = <span class="string">'w'</span>)</span><br><span class="line">plt.plot(tpe_results[<span class="string">'iteration'</span>][<span class="number">1500</span>:<span class="number">2000</span>], tpe_results[<span class="string">'rolling_avg_x'</span>][<span class="number">1500</span>:<span class="number">2000</span>]);</span><br><span class="line">plt.show()</span><br></pre></td></tr></table></figure>
+
+<img src="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/%E5%89%8D500%E6%AC%A1%E8%BF%AD%E4%BB%A3x%E5%8F%98%E5%8C%96.png" class="" title="图片-前500次迭代x变化">
+
+<img src="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/%E5%90%8E500%E6%AC%A1%E8%BF%AD%E4%BB%A3x%E5%8F%98%E5%8C%96.png" class="" title="图片-后500次迭代x变化">
+
+
+
+
+
+<p>&emsp;&emsp;可以看到曲线趋于平整。和我们的猜想一致。<br>　　把上面代码里面的’rolling_avg_x’ 换成’rolling_avg_loss’也可以看loss函数的均值变化。这里就不展示了。</p>
+<ol start="3">
+<li>画出 ‘iteration’ &amp; ‘Value of x’ 的散点图</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">plt.figure(figsize = (<span class="number">8</span>, <span class="number">6</span>))</span><br><span class="line">plt.plot(tpe_results[<span class="string">'iteration'</span>], tpe_results[<span class="string">'x'</span>],  <span class="string">'bo'</span>, alpha = <span class="number">0.5</span>);</span><br><span class="line">plt.xlabel(<span class="string">'Iteration'</span>, size = <span class="number">22</span>); plt.ylabel(<span class="string">'x value'</span>, size = <span class="number">22</span>); </span><br><span class="line">plt.title(<span class="string">'TPE Sequence of Values'</span>, size = <span class="number">24</span>);</span><br><span class="line">plt.hlines(minx, <span class="number">0</span>, <span class="number">2000</span>, linestyles = <span class="string">'--'</span>, colors = <span class="string">'r'</span>);</span><br><span class="line">plt.show();</span><br></pre></td></tr></table></figure>
+
+<img src="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/%E6%95%A3%E7%82%B9%E5%9B%BE-x%E5%8F%96%E5%80%BC%E6%95%A3%E7%82%B9%E5%9B%BE.png" class="" title="图片-散点图-x取值散点图">
+
+<p>&emsp;&emsp;可以清晰看出在迭代过程，x取值范围的0聚拢情况.<br>　　在聚拢的过程中，依旧有散落的离群点，就是为了防止犯极值点当最值点的错误，随机在x取值范围外进行 “探索”的点。</p>
+<ol start="4">
+<li>画出 ‘Value of x’ &amp; ‘count of x’ 的柱状图<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">plt.figure(figsize = (<span class="number">8</span>, <span class="number">6</span>))</span><br><span class="line">plt.hist(tpe_results[<span class="string">'x'</span>], bins = <span class="number">50</span>, edgecolor = <span class="string">'k'</span>);</span><br><span class="line">plt.title(<span class="string">'Histogram of TPE Values'</span>); plt.xlabel(<span class="string">'Value of x'</span>); plt.ylabel(<span class="string">'Count'</span>);</span><br><span class="line">plt.show()</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<img src="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/%E6%9F%B1%E5%BD%A2%E5%9B%BE-x%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E5%88%86%E7%AE%B1.png" class="" title="图片-柱形图-x作为参数分箱">
+
+
+<h4 id="随机调参，在每次迭代中，发生了什么"><a href="#随机调参，在每次迭代中，发生了什么" class="headerlink" title="随机调参，在每次迭代中，发生了什么"></a>随机调参，在每次迭代中，发生了什么</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 07.01 </span></span><br><span class="line">rand_results = pd.DataFrame(&#123;<span class="string">'loss'</span>: [x[<span class="string">'loss'</span>] <span class="keyword">for</span> x <span class="keyword">in</span> rand_trials.results],</span><br><span class="line">                             <span class="string">'iteration'</span>: rand_trials.idxs_vals[<span class="number">0</span>][<span class="string">'x'</span>],</span><br><span class="line">                             <span class="string">'x'</span>: rand_trials.idxs_vals[<span class="number">1</span>][<span class="string">'x'</span>]&#125;)</span><br><span class="line">rand_results.head(<span class="number">20</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 07.02 散点图</span></span><br><span class="line">plt.figure(figsize = (<span class="number">10</span>, <span class="number">8</span>))</span><br><span class="line">plt.plot(rand_results[<span class="string">'iteration'</span>], rand_results[<span class="string">'x'</span>],  <span class="string">'bo'</span>, alpha = <span class="number">0.5</span>);</span><br><span class="line">plt.xlabel(<span class="string">'Iteration'</span>, size = <span class="number">22</span>); plt.ylabel(<span class="string">'x value'</span>, size = <span class="number">22</span>); plt.title(<span class="string">'Random Sequence of Values'</span>, size = <span class="number">24</span>);</span><br><span class="line">plt.hlines(minx, <span class="number">0</span>, <span class="number">2000</span>, linestyles = <span class="string">'--'</span>, colors = <span class="string">'r'</span>);</span><br><span class="line">plt.show();                             </span><br><span class="line"></span><br><span class="line"><span class="comment"># 07.03</span></span><br><span class="line"><span class="comment"># Sort with best loss first</span></span><br><span class="line">rand_results = rand_results.sort_values(<span class="string">'loss'</span>, ascending = <span class="literal">True</span>).reset_index()</span><br><span class="line"></span><br><span class="line">plt.figure(figsize = (<span class="number">8</span>, <span class="number">6</span>))</span><br><span class="line">plt.hist(rand_results[<span class="string">'x'</span>], bins = <span class="number">50</span>, edgecolor = <span class="string">'k'</span>);</span><br><span class="line">plt.title(<span class="string">'Histogram of Random Values'</span>); plt.xlabel(<span class="string">'Value of x'</span>); plt.ylabel(<span class="string">'Count'</span>);</span><br><span class="line">plt.show()</span><br><span class="line"><span class="comment"># Print information</span></span><br><span class="line">print(<span class="string">'Best Loss of &#123;:.4f&#125; occured at iteration &#123;&#125;'</span>.format(rand_results[<span class="string">'loss'</span>][<span class="number">0</span>], rand_results[<span class="string">'iteration'</span>][<span class="number">0</span>]))</span><br><span class="line"><span class="comment"># Best Loss of -219.8012 occured at iteration 235</span></span><br></pre></td></tr></table></figure>
+
+<img src="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/%E6%95%A3%E7%82%B9%E5%9B%BE-x%E5%8F%96%E5%80%BC%E6%95%A3%E7%82%B9%E5%9B%BErand.png" class="" title="图片-散点图-x取值散点图rand">
+
+<img src="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/%E6%9F%B1%E5%BD%A2%E5%9B%BE-x%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E5%88%86%E7%AE%B1rand.png" class="" title="图片-柱形图-x作为参数分箱rand">
+
+<p>&emsp;&emsp;rand在调参过程中是完全随机的，并没有一个聚拢，越调越细致的过程。</p>
+<h4 id="高阶啊呸-中阶应用"><a href="#高阶啊呸-中阶应用" class="headerlink" title="高阶啊呸  中阶应用"></a><del>高阶啊呸</del>  中阶应用</h4><h5 id="选择更合适的参数空间——space"><a href="#选择更合适的参数空间——space" class="headerlink" title="选择更合适的参数空间——space()"></a>选择更合适的参数空间——space()</h5><p>&emsp;&emsp;工作时候，我们可以根据经验，对参数空间有一个大概的感觉，那么space()提供了假设分布的选择，我们可以先给参数做一个假设分布，让调参效率更高。<br>　　本例中，我们假设参数范围服从avg(x)=4.09; std(x)=0.5 正态分布。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">space = hp.normal(<span class="string">'x'</span>, <span class="number">4.9</span>, <span class="number">0.5</span>)</span><br><span class="line"></span><br><span class="line">samples = []  <span class="comment">#重新根据 normal 高斯分布采样</span></span><br><span class="line"><span class="keyword">for</span> _ <span class="keyword">in</span> range(<span class="number">10000</span>):</span><br><span class="line">    samples.append(sample(space))</span><br><span class="line">    </span><br><span class="line"><span class="comment"># 画柱状图看下在高斯分布的参数空间里，x的取值频率</span></span><br><span class="line">plt.hist(samples, bins = <span class="number">20</span>, edgecolor = <span class="string">'black'</span>);</span><br><span class="line">plt.xlabel(<span class="string">'x'</span>); plt.ylabel(<span class="string">'Frequency'</span>); plt.title(<span class="string">'Domain Space'</span>);</span><br><span class="line">plt.show();</span><br><span class="line"></span><br><span class="line"><span class="comment"># 新建一个放结果的trials</span></span><br><span class="line">trials = Trials()</span><br></pre></td></tr></table></figure>
+
+<img src="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/%E6%9F%B1%E5%BD%A2%E5%9B%BE-%E6%AD%A3%E6%80%81%E5%88%86%E5%B8%83%E6%A0%B7%E6%9C%ACx%E9%A2%91%E6%95%B0.png" class="" title="图片-柱形图-正态分布样本x频数">
+
+<p>&emsp;&emsp;嗯。。的确是正态分布。</p>
+<h5 id="在objective目标函数里-字典中放入更多的信息"><a href="#在objective目标函数里-字典中放入更多的信息" class="headerlink" title="在objective目标函数里 字典中放入更多的信息"></a>在objective目标函数里 字典中放入更多的信息</h5><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> hyperopt <span class="keyword">import</span> STATUS_OK</span><br><span class="line"><span class="keyword">from</span> timeit <span class="keyword">import</span> default_timer <span class="keyword">as</span> timer</span><br></pre></td></tr></table></figure>
+<p>&emsp;&emsp;我们可以在目标函数objective()里面定义自己需要的信息，在trials.results里面会记录下每次迭代中的信息。<br>　　这里我们重新定义目标函数objective()，加入损失函数Loss、迭代状态、x取值、耗时 这四个信息。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">objective</span><span class="params">(x)</span>:</span></span><br><span class="line">    <span class="string">"""Objective function to minimize with smarter return values"""</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># Create the polynomial object</span></span><br><span class="line">    f = np.poly1d([<span class="number">1</span>, <span class="number">-2</span>, <span class="number">-28</span>, <span class="number">28</span>, <span class="number">12</span>, <span class="number">-26</span>, <span class="number">100</span>])</span><br><span class="line"></span><br><span class="line">    <span class="comment"># Evaluate the function</span></span><br><span class="line">    start = timer()  </span><br><span class="line">    loss = f(x) * <span class="number">0.05</span></span><br><span class="line">    end = timer()</span><br><span class="line"></span><br><span class="line">    <span class="comment"># Calculate time to evaluate</span></span><br><span class="line">    time_elapsed = end - start</span><br><span class="line"></span><br><span class="line">    results = &#123;<span class="string">'loss'</span>: loss, <span class="string">'status'</span>: STATUS_OK, <span class="string">'x'</span>: x, <span class="string">'time'</span>: time_elapsed&#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment"># Return dictionary</span></span><br><span class="line">    <span class="keyword">return</span> results</span><br></pre></td></tr></table></figure>
+
+<h5 id="fmin-1"><a href="#fmin-1" class="headerlink" title="fmin"></a>fmin</h5><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">best = fmin(fn = objective,</span><br><span class="line">            space = space,</span><br><span class="line">            algo = tpe_algo,</span><br><span class="line">            trials = trials,</span><br><span class="line">            max_evals = <span class="number">2000</span>,</span><br><span class="line">            rstate = np.random.RandomState(<span class="number">120</span>))</span><br></pre></td></tr></table></figure>
+<p>结果放置在trals.reults里，我们拿出来两条看看。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">results = trials.results</span><br><span class="line">results[: <span class="number">2</span>]</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[&#123;<span class="string">'loss'</span>: <span class="number">-189.3682041842684</span>,</span><br><span class="line">  <span class="string">'status'</span>: <span class="string">'ok'</span>,</span><br><span class="line">  <span class="string">'x'</span>: <span class="number">5.312379584994148</span>,</span><br><span class="line">  <span class="string">'time'</span>: <span class="number">0.0006109136229497381</span>&#125;,</span><br><span class="line"> &#123;<span class="string">'loss'</span>: <span class="number">-219.325099632915</span>,</span><br><span class="line">  <span class="string">'status'</span>: <span class="string">'ok'</span>,</span><br><span class="line">  <span class="string">'x'</span>: <span class="number">4.8166084516702705</span>,</span><br><span class="line">  <span class="string">'time'</span>: <span class="number">4.819479363504797e-05</span>&#125;]</span><br></pre></td></tr></table></figure>
+
+<p> &emsp;&emsp; 转成datafram<br> &emsp;&emsp; 按照loss排个名。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Results into a dataframe</span></span><br><span class="line">results_df = pd.DataFrame(&#123;<span class="string">'time'</span>: [x[<span class="string">'time'</span>] <span class="keyword">for</span> x <span class="keyword">in</span> results],</span><br><span class="line">                           <span class="string">'loss'</span>: [x[<span class="string">'loss'</span>] <span class="keyword">for</span> x <span class="keyword">in</span> results],</span><br><span class="line">                           <span class="string">'x'</span>: [x[<span class="string">'x'</span>] <span class="keyword">for</span> x <span class="keyword">in</span> results],</span><br><span class="line">                            <span class="string">'iteration'</span>: list(range(len(results)))&#125;)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Sort with lowest loss on top</span></span><br><span class="line">results_df = results_df.sort_values(<span class="string">'loss'</span>, ascending = <span class="literal">True</span>)</span><br><span class="line">results_df.head()</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th></th>
+<th>time</th>
+<th>loss</th>
+<th>x</th>
+<th>iteration</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>956</td>
+<td>0.000059</td>
+<td>-219.801204</td>
+<td>4.878152</td>
+<td>956</td>
+</tr>
+<tr>
+<td>1316</td>
+<td>0.000037</td>
+<td>-219.801204</td>
+<td>4.878111</td>
+<td>1316</td>
+</tr>
+<tr>
+<td>402</td>
+<td>0.000027</td>
+<td>-219.801204</td>
+<td>4.878189</td>
+<td>402</td>
+</tr>
+<tr>
+<td>914</td>
+<td>0.000106</td>
+<td>-219.801203</td>
+<td>4.878064</td>
+<td>914</td>
+</tr>
+<tr>
+<td>1954</td>
+<td>0.000037</td>
+<td>-219.801203</td>
+<td>4.878222</td>
+<td>1954</td>
+</tr>
+</tbody></table>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 画个柱状图看看</span></span><br><span class="line">plt.hist(results_df[<span class="string">'x'</span>], bins = <span class="number">50</span>, edgecolor = <span class="string">'k'</span>);plt.title(<span class="string">'Histogram of TPE Values'</span>); plt.xlabel(<span class="string">'Value of x'</span>); </span><br><span class="line">plt.ylabel(<span class="string">'Count'</span>);</span><br><span class="line">plt.show()</span><br></pre></td></tr></table></figure>
+
+<img src="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/%E6%9F%B1%E5%BD%A2%E5%9B%BE-x%E4%BD%9C%E4%B8%BA%E5%8F%82%E6%95%B0%E5%88%86%E7%AE%B1%E6%AD%A3%E6%80%81%E5%88%86%E5%B8%83.png" class="" title="图片-柱形图-x作为参数分箱正态分布">
+
+<h5 id="对比不同的参数空间"><a href="#对比不同的参数空间" class="headerlink" title="对比不同的参数空间"></a>对比不同的参数空间</h5><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">sns.kdeplot(results_df[<span class="string">'x'</span>], label = <span class="string">'Normal Domain'</span>)</span><br><span class="line">sns.kdeplot(tpe_results[<span class="string">'x'</span>], label = <span class="string">'Uniform Domain'</span>)</span><br><span class="line">plt.legend(); plt.xlabel(<span class="string">'Value of x'</span>); plt.ylabel(<span class="string">'Density'</span>); plt.title(<span class="string">'Comparison of Domain Choice using TPE'</span>);</span><br><span class="line">plt.show()</span><br></pre></td></tr></table></figure>
+
+<img src="/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/%E6%8A%98%E7%BA%BF%E5%9B%BE-%E5%AF%B9%E6%AF%94%E4%B8%8D%E5%90%8C%E7%9A%84space.png" class="" title="图片-折线图-对比不同的space">
+
+<p> &emsp;&emsp; ho.normal 相对 hp.uniform ，让参数估计更加的聚拢，更容易找到更小值。</p>
+<h3 id="结束"><a href="#结束" class="headerlink" title="结束"></a>结束</h3><p>&emsp;&emsp;我们利用多项式的例子，了解了tpe调参的基本步骤。<br>&emsp;&emsp;在此基础中，又了解了，space参数空间可以指定其他的假设分布，让我们可以根据经验值，更好的调优。<br>&emsp;&emsp;贝叶斯调优的part1部分写完了，接下来part2用保险数据，场景化的完成一次案例参数调优。</p>
+
+    </div>
+
+    
+    
+    
+        
+
+<div>
+<ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者： </strong>cao wei
+  </li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    <a href="http://yoursite.com/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/" title="【调参方法】贝叶斯优化、Hyperopt工具包">http://yoursite.com/all/%E3%80%90%E8%B0%83%E5%8F%82%E6%96%B9%E6%B3%95%E3%80%91%E8%B4%9D%E5%8F%B6%E6%96%AF%E4%BC%98%E5%8C%96%E3%80%81Hyperopt%E5%B7%A5%E5%85%B7%E5%8C%85/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/null" rel="noopener" target="_blank"><i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+
+      <footer class="post-footer">
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/all/%E3%80%90%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E3%80%91%E6%96%B0%E9%97%BB%E5%88%86%E7%B1%BBpart1-%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86%E7%82%B9%E4%B8%8E%E5%AE%9E%E7%8E%B0/" rel="next" title="【自然语言】新闻分类part1--基础知识点与实现">
+                  <i class="fa fa-chevron-left"></i> 【自然语言】新闻分类part1--基础知识点与实现
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/all/%E3%80%90%E5%B0%8F%E6%8A%80%E5%B7%A7%E3%80%91PDF%E6%8C%87%E5%AE%9A%E9%A1%B5%E7%A0%81%E5%88%86%E5%89%B2/" rel="prev" title="【小技巧】PDF指定页码分割">
+                  【小技巧】PDF指定页码分割 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#原理"><span class="nav-number">1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#通俗理解"><span class="nav-number">2.</span> <span class="nav-text">通俗理解</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#贝叶斯优化所需四大部分："><span class="nav-number">2.1.</span> <span class="nav-text">贝叶斯优化所需四大部分：</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#解释"><span class="nav-number">2.2.</span> <span class="nav-text">解释</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#安装包和版本兼容问题"><span class="nav-number">3.</span> <span class="nav-text">安装包和版本兼容问题</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#多项式案例"><span class="nav-number">4.</span> <span class="nav-text">多项式案例</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#先导入常用包"><span class="nav-number">4.1.</span> <span class="nav-text">先导入常用包</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Objective-目标函数"><span class="nav-number">4.2.</span> <span class="nav-text">Objective 目标函数</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#numpy-poly1d-官方文档"><span class="nav-number">4.2.1.</span> <span class="nav-text">numpy.poly1d     官方文档</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Domain-space-指定参数空间"><span class="nav-number">4.3.</span> <span class="nav-text">Domain space: 指定参数空间</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Hyperparameter-optimization-function-可以选择的采样算法，随机或者贝叶斯优化"><span class="nav-number">4.4.</span> <span class="nav-text">Hyperparameter optimization function: 可以选择的采样算法，随机或者贝叶斯优化</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Trials-记录结果的保存"><span class="nav-number">4.5.</span> <span class="nav-text">Trials: 记录结果的保存</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#fmin"><span class="nav-number">4.6.</span> <span class="nav-text">fmin</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#贝叶斯优化，在每次迭代中，发生了什么"><span class="nav-number">4.7.</span> <span class="nav-text">贝叶斯优化，在每次迭代中，发生了什么</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#随机调参，在每次迭代中，发生了什么"><span class="nav-number">4.8.</span> <span class="nav-text">随机调参，在每次迭代中，发生了什么</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#高阶啊呸-中阶应用"><span class="nav-number">4.9.</span> <span class="nav-text">高阶啊呸  中阶应用</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#选择更合适的参数空间——space"><span class="nav-number">4.9.1.</span> <span class="nav-text">选择更合适的参数空间——space()</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#在objective目标函数里-字典中放入更多的信息"><span class="nav-number">4.9.2.</span> <span class="nav-text">在objective目标函数里 字典中放入更多的信息</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#fmin-1"><span class="nav-number">4.9.3.</span> <span class="nav-text">fmin</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#对比不同的参数空间"><span class="nav-number">4.9.4.</span> <span class="nav-text">对比不同的参数空间</span></a></li></ol></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#结束"><span class="nav-number">5.</span> <span class="nav-text">结束</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="cao wei"
+    src="/images/touxiang.jpg">
+  <p class="site-author-name" itemprop="name">cao wei</p>
+  <div class="site-description" itemprop="description">30岁人类普遍死亡，50岁人生刚刚开始</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+        <span class="site-state-item-count">1</span>
+        <span class="site-state-item-name">分类</span>
+      </div>
+      <div class="site-state-item site-state-tags">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">标签</span>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="/vivi.777@qq.com" title="E-Mail &amp;rarr; vivi.777@qq.com"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+  </div>
+  <div class="cc-license motion-element" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/null" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">cao wei</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.5.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+<script src="/js/utils.js"></script><script src="/js/motion.js"></script>
+<script src="/js/schemes/pisces.js"></script>
+<script src="/js/next-boot.js"></script>
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+      
+<script type="text/x-mathjax-config">
+
+  MathJax.Hub.Config({
+    tex2jax: {
+      inlineMath: [ ['$', '$'], ['\\(', '\\)'] ],
+      processEscapes: true,
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    },
+    TeX: {
+      equationNumbers: {
+        autoNumber: 'AMS'
+      }
+    }
+  });
+
+  MathJax.Hub.Register.StartupHook('TeX Jax Ready', function() {
+    MathJax.InputJax.TeX.prefilterHooks.Add(function(data) {
+      if (data.display) {
+        var next = data.script.nextSibling;
+        while (next && next.nodeName.toLowerCase() === '#text') {
+          next = next.nextSibling;
+        }
+        if (next && next.nodeName.toLowerCase() === 'br') {
+          next.parentNode.removeChild(next);
+        }
+      }
+    });
+  });
+
+  MathJax.Hub.Queue(function() {
+    var all = MathJax.Hub.getAllJax(), i;
+    for (i = 0; i < all.length; i += 1) {
+      element = document.getElementById(all[i].inputID + '-Frame').parentNode;
+      if (element.nodeName.toLowerCase() == 'li') {
+        element = element.parentNode;
+      }
+      element.classList.add('has-jax');
+    }
+  });
+</script>
+<script>
+  NexT.utils.getScript('//cdn.jsdelivr.net/npm/mathjax@2/MathJax.js?config=TeX-AMS-MML_HTMLorMML', () => {
+    MathJax.Hub.Typeset();
+  }, window.MathJax);
+</script>
+
+    
+
+  
+
+</body>
+</html>
